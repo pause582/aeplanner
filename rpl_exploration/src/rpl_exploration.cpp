@@ -39,9 +39,9 @@ int main(int argc, char** argv)
       nh.serviceClient<aeplanner_evaluation::Coverage>("/get_coverage");
 
   // wait for fly_to server to start
-  // ROS_INFO("Waiting for fly_to action server");
+  ROS_INFO("Waiting for fly_to action server");
   actionlib::SimpleActionClient<rpl_exploration::FlyToAction> ac("fly_to", true);
-  // ac.waitForServer(); //will wait for infinite time
+  ac.waitForServer(); //will wait for infinite time
   // ROS_INFO("Fly to ction server started!");
 
   // wait for aep server to start
@@ -54,13 +54,13 @@ int main(int argc, char** argv)
   // wait for fly_to server to start
   ROS_INFO("Waiting for rrt action server");
   actionlib::SimpleActionClient<rrtplanner::rrtAction> rrt_ac("rrt", true);
-  // rrt_ac.waitForServer(); //will wait for infinite time
+  rrt_ac.waitForServer(); //will wait for infinite time(x)
   ROS_INFO("rrt Action server started!");
 
   // Get current pose
   geometry_msgs::PoseStamped::ConstPtr init_pose =
-      ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/mavros/"
-                                                             "local_position/pose");
+      ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/pose"); //modified
+  ROS_INFO("init pose get!");
   double init_yaw = tf2::getYaw(init_pose->pose.orientation);
   // Up 2 meters and then forward one meter
   double initial_positions[8][4] = {
@@ -106,7 +106,10 @@ int main(int argc, char** argv)
     aep_goal.header.seq = iteration;
     aep_goal.header.frame_id = "map";
     aep_goal.actions_taken = actions_taken;
+
+    ROS_INFO_STREAM("Sending AEP goal");
     aep_ac.sendGoal(aep_goal);
+    ROS_INFO_STREAM("Sent");
 
     while (!aep_ac.waitForResult(ros::Duration(0.05)))
     {
@@ -114,6 +117,8 @@ int main(int argc, char** argv)
     }
 
     ros::Duration fly_time;
+
+    //TODO: why is_clear is false?
     if (aep_ac.getResult()->is_clear)
     {
       actions_taken = 0;
@@ -139,7 +144,7 @@ int main(int argc, char** argv)
       rrt_goal.start.header.stamp = ros::Time::now();
       rrt_goal.start.header.frame_id = "map";
       rrt_goal.start.pose = last_pose.pose;
-      if (!aep_ac.getResult()->frontiers.poses.size())
+      if (!aep_ac.getResult()->frontiers.poses.size()) //TODO: it stuck in this!!
       {
         ROS_WARN("Exploration complete!");
         break;

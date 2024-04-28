@@ -44,24 +44,26 @@ void AEPlanner::execute(const aeplanner::aeplannerGoalConstPtr& goal)
     return;
   }
 
-  ROS_DEBUG("Init");
+  ROS_INFO_STREAM("Got new goal: Fly to");
+
+  ROS_INFO_STREAM("Init");
   RRTNode* root = initialize();
-  ROS_DEBUG("expandRRT");
+  ROS_INFO_STREAM("expandRRT");
   if (root->gain_ > 0.25 or !root->children_.size() or // FIXME parameterize
       root->score(params_.lambda) < params_.zero_gain)
     expandRRT();
   else
     best_node_ = root->children_[0];
 
-  ROS_DEBUG("getCopyOfParent");
+  ROS_INFO_STREAM("getCopyOfParent");
   best_branch_root_ = best_node_->getCopyOfParentBranch();
 
-  ROS_DEBUG("createRRTMarker");
+  ROS_INFO_STREAM("createRRTMarker");
   rrt_marker_pub_.publish(createRRTMarkerArray(root, params_.lambda));
-  ROS_DEBUG("publishRecursive");
+  ROS_INFO_STREAM("publishRecursive");
   publishEvaluatedNodesRecursive(root);
 
-  ROS_DEBUG("extractPose");
+  ROS_INFO_STREAM("extractPose");
   result.pose.pose = vecToPose(best_branch_root_->children_[0]->state_);
   ROS_INFO_STREAM("Best node score: " << best_node_->score(params_.lambda));
   if (best_node_->score(params_.lambda) > params_.zero_gain)
@@ -158,7 +160,7 @@ void AEPlanner::expandRRT()
     // (2) it is in known space
     // (3) the path between the new node and it's parent does not contain any
     // obstacles
-
+    ROS_INFO_STREAM("start expandRRT");
     do
     {
       Eigen::Vector4d offset = sampleNewPoint();
@@ -167,27 +169,32 @@ void AEPlanner::expandRRT()
       nearest = chooseParent(new_node, params_.extension_range);
 
       new_node->state_ = restrictDistance(nearest->state_, new_node->state_);
+      //ROS_INFO_STREAM("ER: " << params_.extension_range << " MSR: " << params_.max_sampling_radius);
 
-      ROS_DEBUG_STREAM("Trying node (" << new_node->state_[0] << ", "
-                                       << new_node->state_[1] << ", "
-                                       << new_node->state_[2] << ")");
-      ROS_DEBUG_STREAM("    nearest (" << nearest->state_[0] << ", " << nearest->state_[1]
-                                       << ", " << nearest->state_[2] << ")");
+      //ROS_INFO_STREAM("Trying node (" << new_node->state_[0] << ", "<< new_node->state_[1] << ", "<< new_node->state_[2] << ")");
+
       ot_result = ot->search(octomap::point3d(new_node->state_[0], new_node->state_[1],
                                               new_node->state_[2]));
-      if (ot_result == NULL)
+      if (ot_result == NULL){
+        //TODO: inf. loop
+        //ROS_INFO_STREAM("Failed");
         continue;
-      ROS_DEBUG_STREAM("ot check done!");
-
-      ROS_DEBUG_STREAM("Inside boundaries?  " << isInsideBoundaries(new_node->state_));
-      ROS_DEBUG_STREAM("In known space?     " << ot_result);
-      ROS_DEBUG_STREAM("Collision?          " << collisionLine(
-                           nearest->state_, new_node->state_, params_.bounding_radius));
+      }
+      /*
+      ROS_INFO_STREAM("ot check done!");
+      ROS_INFO_STREAM("Inside boundaries?  " << isInsideBoundaries(new_node->state_));
+      ROS_INFO_STREAM("In known space?     " << ot_result);
+      ROS_INFO_STREAM("Collision?          " << collisionLine(
+                          nearest->state_, new_node->state_, params_.bounding_radius));
+      */
     } while (!isInsideBoundaries(new_node->state_) or !ot_result or
              collisionLine(nearest->state_, new_node->state_, params_.bounding_radius));
 
-    ROS_DEBUG_STREAM("New node (" << new_node->state_[0] << ", " << new_node->state_[1]
+    ROS_INFO_STREAM("finish expandRRT");
+
+    /*ROS_INFO_STREAM("New node (" << new_node->state_[0] << ", " << new_node->state_[1]
                                   << ", " << new_node->state_[2] << ")");
+                                  */
     // new_node is now ready to be added to tree
     new_node->parent_ = nearest;
     nearest->children_.push_back(new_node);
@@ -395,19 +402,27 @@ std::pair<double, double> AEPlanner::gainCubature(Eigen::Vector4d state)
         Eigen::Vector4d v(vec[0], vec[1], vec[2], 0);
         if (!isInsideBoundaries(v))
           break;
+        
         if (result)
         {
           // Break if occupied so we don't count any information gain behind a wall.
-          if (result->getLogOdds() > 0)
+          if (result->getLogOdds() > 0){
+            //ROS_INFO_STREAM("Behind wall! odds: " << result->getLogOdds());
             break;
+          }
+          //ROS_INFO_STREAM("Meaningful g value= " << g);
         }
-        else
+        else{
           g += (2 * r * r * dr + 1 / 6 * dr * dr * dr) * dtheta_rad * sin(phi_rad) *
                sin(dphi_rad / 2);
+          //ROS_INFO_STREAM("Meaningful g value= " << g);
+        }
+          
       }
 
       gain += g;
       gain_per_yaw[theta] += g;
+      //ROS_INFO_STREAM("gain_per_yaw= " << gain_per_yaw[theta] << "g= " << g);
     }
   }
 
@@ -426,7 +441,7 @@ std::pair<double, double> AEPlanner::gainCubature(Eigen::Vector4d state)
       yaw_score += gain_per_yaw[theta];
     }
 
-    if (best_yaw_score < yaw_score)
+    if (best_yaw_score < yaw_score) //NOTE: 3/17, change < to >
     {
       best_yaw_score = yaw_score;
       best_yaw = yaw;
@@ -442,13 +457,14 @@ std::pair<double, double> AEPlanner::gainCubature(Eigen::Vector4d state)
   double yaw = M_PI * best_yaw / 180.f;
 
   state[3] = yaw;
+  //ROS_INFO_STREAM("gain= " << gain);
   return std::make_pair(gain, yaw);
 }
 
 geometry_msgs::PoseArray AEPlanner::getFrontiers()
 {
   geometry_msgs::PoseArray frontiers;
-
+  
   pigain::BestNode srv;
   srv.request.threshold = 16; // FIXME parameterize
   if (best_node_client_.call(srv))
@@ -462,6 +478,7 @@ geometry_msgs::PoseArray AEPlanner::getFrontiers()
   }
   else
   {
+    ROS_WARN_STREAM("PIGain no response!");
   }
 
   return frontiers;
@@ -469,6 +486,8 @@ geometry_msgs::PoseArray AEPlanner::getFrontiers()
 
 bool AEPlanner::isInsideBoundaries(Eigen::Vector4d point)
 {
+  //return point[2] > 0;
+  //return true; //NOTE: open environment has no boundary expect ground
   return point[0] > params_.boundary_min[0] and point[0] < params_.boundary_max[0] and
          point[1] > params_.boundary_min[1] and point[1] < params_.boundary_max[1] and
          point[2] > params_.boundary_min[2] and point[2] < params_.boundary_max[2];
@@ -476,8 +495,11 @@ bool AEPlanner::isInsideBoundaries(Eigen::Vector4d point)
 
 bool AEPlanner::collisionLine(Eigen::Vector4d p1, Eigen::Vector4d p2, double r)
 {
+
+  //return false; //DEBUG
+
   std::shared_ptr<octomap::OcTree> ot = ot_;
-  ROS_DEBUG_STREAM("In collision");
+  //ROS_DEBUG_STREAM("In collision");
   octomap::point3d start(p1[0], p1[1], p1[2]);
   octomap::point3d end(p2[0], p2[1], p2[2]);
   octomap::point3d min(std::min(p1[0], p2[0]) - r, std::min(p1[1], p2[1]) - r,
@@ -501,7 +523,7 @@ bool AEPlanner::collisionLine(Eigen::Vector4d p1, Eigen::Vector4d p2, double r)
       }
     }
   }
-  ROS_DEBUG_STREAM("In collision (exiting)");
+  //ROS_DEBUG_STREAM("In collision (exiting)");
 
   return false;
 }

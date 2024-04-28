@@ -23,10 +23,10 @@ namespace rpl_exploration {
       void execute(const rpl_exploration::FlyToGoalConstPtr& goal, 
                    actionlib::SimpleActionServer<rpl_exploration::FlyToAction> * as)
       {
+        
         ROS_INFO_STREAM("Got new goal: Fly to (" << goal->pose.pose.position.x << ", "
                                                  << goal->pose.pose.position.y << ", "
                                                  << goal->pose.pose.position.z << ") ");
-
         ros::Rate r(20);
         geometry_msgs::Point p = goal->pose.pose.position;
 
@@ -47,13 +47,13 @@ namespace rpl_exploration {
         m.getRPY(roll, pitch, goal_yaw);
 
         // Check if target is reached...
+        ROS_INFO_STREAM("Publishing goal to (" << p.x << ", " << p.y << ", " << p.z << ") ");
         do
         {
-          ROS_INFO_STREAM("Publishing goal to (" << p.x << ", " << p.y << ", " << p.z << ") ");
-          pub_.publish(goal->pose);
-
-          listener.waitForTransform("/map", "/base_link", ros::Time(0), ros::Duration(10.0) );
-          listener.lookupTransform("/map", "/base_link", ros::Time(0), transform);
+          //ROS_INFO_STREAM("Publishing goal to (" << p.x << ", " << p.y << ", " << p.z << ") ");
+          pub_.publish(goal->pose); 
+          listener.waitForTransform("/map", "/camera_link", ros::Time(0), ros::Duration(10.0) ); //TODO: should work with "remap" rather then hard-coding
+          listener.lookupTransform("/map", "/camera_link", ros::Time(0), transform);
 
           geometry_msgs::Point q;
           q.x = (float)transform.getOrigin().x(); 
@@ -70,7 +70,7 @@ namespace rpl_exploration {
           double current_yaw;
           m.getRPY(roll, pitch, current_yaw);
 
-          ROS_INFO_STREAM("Current position: (" << q.x << ", " << q.y << ", " << q.z << ") ");
+          //ROS_INFO_STREAM("Current position: (" << q.x << ", " << q.y << ", " << q.z << ") ");
           geometry_msgs::Point d; 
           d.x = p.x - q.x;
           d.y = p.y - q.y;
@@ -81,8 +81,8 @@ namespace rpl_exploration {
           yaw_diff = fabs(atan2(sin(goal_yaw-current_yaw), cos(goal_yaw-current_yaw)));
 
           r.sleep();
-        } while(distance_to_goal > 0.8 or yaw_diff > 0.6*M_PI);
-
+        } while(distance_to_goal > 0.8 or yaw_diff > 0.6*M_PI); //TODO: deal with yaw later
+        ROS_INFO_STREAM("success!");
 
         as->setSucceeded();
       }

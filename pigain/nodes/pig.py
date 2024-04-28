@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import rospy
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
@@ -68,6 +68,7 @@ class PIGain:
         self.id = 0
 
         rospy.Timer(rospy.Duration(5), self.reevaluate_timer_callback)
+        rospy.loginfo("pig is initialized.")
 
     """ Save current pose of agent """
     def pose_callback(self, msg):
@@ -96,7 +97,7 @@ class PIGain:
                 reevaluate_list.append(item)
         try:
             res = self.reevaluate_client(reevaluate_position_list)
-        except rospy.ServiceException, e:
+        except rospy.ServiceException as e:
             rospy.logerr("Calling reevaluate service failed")
             return
 
@@ -151,11 +152,11 @@ class PIGain:
     """ Return all nodes with gain higher than req.threshold """
     def best_node_srv_callback(self, req):
         hits = self.idx.intersection(self.bbx, objects=True)
-
         best_gain = -1
         best_pose = None
         response = BestNodeResponse()
         for item in hits:
+            rospy.loginfo("gain=" + str(item.object.gain)) # TODO: always 0.0 ?? why
             if item.object.gain > req.threshold:
                 response.best_node.append(item.object.position)
             if item.object.gain > best_gain:

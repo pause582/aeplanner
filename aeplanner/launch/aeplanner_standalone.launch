@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <launch>
-  <arg name="param_file" default="$(find rpl_exploration)/config/exploration.yaml" />
   <group ns="aeplanner">
-
+    <!--<arg name="param_file" default="$(find rpl_exploration)/config/exploration.yaml" /> -->
+    <rosparam command="load" file="$(find rpl_exploration)/config/exploration.yaml" />
     <include file="$(find aeplanner)/launch/aeplanner_nodelet.launch"/>
   </group>
 </launch>

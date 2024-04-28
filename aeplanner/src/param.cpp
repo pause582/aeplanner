@@ -17,7 +17,7 @@ namespace aeplanner
     if (!ros::param::get(ns + "/camera/vertical_fov", params.vfov)) {
       ROS_WARN_STREAM("No vertical fov specified. Default: " << params.vfov);
     }
-    params.dr = 0.1;
+    params.dr = 0.05;
     if (!ros::param::get("/octomap_server/resolution", params.dr)) {
       ROS_WARN_STREAM("Could not read octomap resolution. Looking for /octomap_server/resolution.");
       ROS_WARN_STREAM("Using resolution specified by param file instead");
